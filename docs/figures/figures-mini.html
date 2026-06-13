@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<!--
+  figures-mini.html — DESIGN BRIEF (not the figures themselves).
+
+  This file is a structured request describing the flowcharts and figures the
+  from-scratch NumPy net needs for the CheXVision report and slide deck. the assistant
+  Design (or the docs/figures pipeline in the parent repo) produces the actual
+  SVG/PNG artwork from these prompts and integrates it into docs/report.html and
+  docs/index.html. Do NOT hand-edit the parent report/deck for these — author
+  the figures here first.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>chexvision-mini — Figures Design Brief</title>
+</head>
+<body>
+  <h1>Figures needed (design brief for the design tooling)</h1>
+
+  <section id="fig-mini-1">
+    <h2>Fig M1 — Forward / backward flow</h2>
+    <p><strong>Goal:</strong> show the explicit forward chain and the reversed
+    backward chain through the MLP, making backprop visible.</p>
+    <p><strong>Prompt:</strong> Horizontal pipeline of blocks
+    <code>input(1024) → Linear → ReLU → Dropout → Linear → ReLU → Dropout →
+    Linear(1) → σ</code>. A forward arrow (left→right) labelled with each
+    layer's output; a return arrow (right→left) labelled with the gradients
+    <code>dout</code>, annotated <code>dW = xᵀ·dout</code>, <code>db = Σdout</code>,
+    <code>dx = dout·Wᵀ</code>. Match the parent report's figure styling.</p>
+  </section>
+
+  <section id="fig-mini-2">
+    <h2>Fig M2 — Gradient-check validation</h2>
+    <p><strong>Goal:</strong> visually assert backprop correctness.</p>
+    <p><strong>Prompt:</strong> Scatter of analytic vs numerical gradient (one
+    point per checked parameter), on a y=x line; annotate "max relative error &lt; 1e-6".
+    Small, clean, single-accent-colour.</p>
+  </section>
+
+  <section id="fig-mini-3">
+    <h2>Fig M3 — Training curve</h2>
+    <p><strong>Goal:</strong> show learning on the binary task.</p>
+    <p><strong>Prompt:</strong> Line chart of train vs validation BCE loss over
+    epochs, plus a secondary line for validation AUC. Source data:
+    <code>artifacts/history.json</code> from a Kaggle run.</p>
+  </section>
+
+  <section id="fig-mini-4">
+    <h2>Fig M4 — Three-model terminology comparison</h2>
+    <p><strong>Goal:</strong> remove the "from scratch" ambiguity for the grader.</p>
+    <p><strong>Prompt:</strong> Three labelled cards side by side —
+    <em>Custom CNN (random init, PyTorch)</em>,
+    <em>Transfer DenseNet-121 (pretrained, PyTorch)</em>,
+    <em>From-scratch NumPy net (no framework, no autograd) — this repo</em>.
+    For each: framework, autograd yes/no, pretrained yes/no, role in the project.</p>
+  </section>
+</body>
+</html>

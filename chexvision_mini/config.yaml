@@ -1,0 +1,31 @@
+# Default configuration for the from-scratch NumPy net.
+# CLI flags (see `python -m chexvision_mini --help`) override these; the per-mode
+# block under `data.modes` overrides sample counts and epochs for each run mode.
+
+seed: 42
+image_size: 32          # images are downsampled to 32x32 grayscale -> 1024 inputs
+
+model:
+  hidden_dims: [256, 64]  # MLP hidden layer widths (Linear -> ReLU per entry)
+  dropout: 0.2            # inverted dropout after each hidden activation
+
+training:
+  optimizer: adam         # "adam" or "sgd"
+  lr: 0.001
+  momentum: 0.9           # used only by SGD
+  weight_decay: 0.0001    # L2 penalty
+  label_smoothing: 0.05
+  batch_size: 64
+  epochs: 20              # overridden per mode below
+  augment: true
+
+data:
+  dataset_repo: arudaev/chest-xray-14-320
+  modes:
+    synthetic: { n_train: 512, n_val: 256, epochs: 15 }
+    local:     { n_train: 400, n_val: 200, epochs: 8 }
+    kaggle:    { n_train: 16000, n_val: 4000, epochs: 40 }
+
+hub:
+  repo_id: arudaev/chexvision-mini
+  upload: false           # set true (or pass --upload) inside the Kaggle kernel
