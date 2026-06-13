@@ -19,10 +19,11 @@ from typing import Any
 import numpy as np
 
 from .augment import augment_batch
+from .card import render_model_card
 from .data import load_xray_subset
 from .layers import Linear, ReLU
 from .losses import BCEWithLogitsLoss, sigmoid
-from .metrics import accuracy, roc_auc
+from .metrics import accuracy, evaluation_report, roc_auc
 from .network import Sequential
 from .optim import SGD, Adam
 from .regularizers import Dropout
@@ -161,12 +162,46 @@ def train(config: dict[str, Any], mode: str, output_dir: Path) -> dict[str, Any]
 
     if best_state is None:
         best_state = model.state_dict()
+    model.load_state_dict(best_state)  # evaluate/report the BEST checkpoint
+
+    val_probs = sigmoid(model.forward(x_val_norm, training=False))
+    report = evaluation_report(val_probs, y_val)
+    aucs = np.array(history["val_auc"], dtype=float)
+    best_epoch = int(np.nanargmax(aucs)) + 1 if np.isfinite(aucs).any() else len(aucs)
+
     output_dir.mkdir(parents=True, exist_ok=True)
-    # Save the best params plus the normalisation stats (needed at inference).
+    # Best params + normalisation stats (needed at inference).
     np.savez(output_dir / "model.npz", **best_state, _norm_mean=mean, _norm_std=std)
+    # Raw validation scores/labels — lets any ROC/PR/threshold figure be rebuilt.
+    np.save(output_dir / "val_scores.npy", val_probs.reshape(-1))
+    np.save(output_dir / "val_labels.npy", y_val.reshape(-1))
     (output_dir / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
+    metrics_out = {
+        "best_epoch": best_epoch,
+        "config": {
+            "image_size": image_size,
+            "hidden_dims": config["model"]["hidden_dims"],
+            "dropout": config["model"]["dropout"],
+            "optimizer": tcfg["optimizer"],
+            "lr": tcfg["lr"],
+            "lr_schedule": tcfg.get("lr_schedule", "none"),
+            "weight_decay": tcfg["weight_decay"],
+            "label_smoothing": tcfg["label_smoothing"],
+            "batch_size": tcfg["batch_size"],
+            "epochs": epochs,
+            "n_train": int(x_train.shape[0]),
+            "n_val": int(x_val.shape[0]),
+            "augment": tcfg["augment"],
+            "standardize": standardize,
+        },
+        **report,
+    }
+    (output_dir / "metrics.json").write_text(json.dumps(metrics_out, indent=2), encoding="utf-8")
+    (output_dir / "README.md").write_text(
+        render_model_card(report, config, best_epoch, epochs), encoding="utf-8"
+    )
     _save_loss_curve(history, output_dir / "loss_curve.png")
-    print(f"[train] best val_auc={best_auc:.4f}; artifacts written to {output_dir}")
+    print(f"[train] best val_auc={best_auc:.4f} (epoch {best_epoch}); artifacts -> {output_dir}")
     return history
 
 

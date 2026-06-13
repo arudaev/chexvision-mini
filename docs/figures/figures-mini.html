@@ -2,57 +2,61 @@
 <!--
   figures-mini.html — DESIGN BRIEF (not the figures themselves).
 
-  This file is a structured request describing the flowcharts and figures the
-  from-scratch NumPy net needs for the CheXVision report and slide deck. the assistant
-  Design (or the docs/figures pipeline in the parent repo) produces the actual
-  SVG/PNG artwork from these prompts and integrates it into docs/report.html and
-  docs/index.html. Do NOT hand-edit the parent report/deck for these — author
-  the figures here first.
+  Two figures only, mirroring the parent repo's style (see docs/figures in
+  chexvision). They are OPTIONAL — to be produced by the design tooling and dropped
+  into the report / deck *only if* we decide the from-scratch net needs a
+  dedicated figure there. The GitHub README already carries Mermaid diagrams, so
+  these are not required for the repo itself.
+
+  - Fig 1 (slide deck): a single concise pipeline flowchart.
+  - Fig 2 (report): one comprehensive figure (architecture + backprop + results).
+
+  Do NOT hand-author four separate figures into both the report and the deck.
 -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>chexvision-mini — Figures Design Brief</title>
+  <title>chexvision-mini — Figures Design Brief (2 figures)</title>
 </head>
 <body>
-  <h1>Figures needed (design brief for the design tooling)</h1>
+  <h1>Figures design brief for the design tooling (optional, 2 figures)</h1>
 
   <section id="fig-mini-1">
-    <h2>Fig M1 — Forward / backward flow</h2>
-    <p><strong>Goal:</strong> show the explicit forward chain and the reversed
-    backward chain through the MLP, making backprop visible.</p>
-    <p><strong>Prompt:</strong> Horizontal pipeline of blocks
-    <code>input(1024) → Linear → ReLU → Dropout → Linear → ReLU → Dropout →
-    Linear(1) → σ</code>. A forward arrow (left→right) labelled with each
-    layer's output; a return arrow (right→left) labelled with the gradients
-    <code>dout</code>, annotated <code>dW = xᵀ·dout</code>, <code>db = Σdout</code>,
-    <code>dx = dout·Wᵀ</code>. Match the parent report's figure styling.</p>
+    <h2>Fig 1 — Pipeline flowchart (for the SLIDE DECK)</h2>
+    <p><strong>Goal:</strong> one clean, glanceable flowchart of the whole
+    from-scratch pipeline — the deck version. Style it like the parent's
+    <code>fig1_pipeline</code>.</p>
+    <p><strong>Prompt:</strong> Left-to-right flow:
+    <code>NIH ChestX-ray14 (320px) → stream + downsample to 64×64 grayscale →
+    standardize → MLP (4096→1024→256→64→1) → BCE-with-logits → backprop
+    (hand-derived) → Adam + cosine LR</code>, with a feedback arrow from the
+    optimizer back to the MLP, and a branch to <code>validation metrics
+    (AUC / accuracy / F1)</code>. Minimal labels, one accent colour.</p>
   </section>
 
   <section id="fig-mini-2">
-    <h2>Fig M2 — Gradient-check validation</h2>
-    <p><strong>Goal:</strong> visually assert backprop correctness.</p>
-    <p><strong>Prompt:</strong> Scatter of analytic vs numerical gradient (one
-    point per checked parameter), on a y=x line; annotate "max relative error &lt; 1e-6".
-    Small, clean, single-accent-colour.</p>
+    <h2>Fig 2 — Comprehensive figure (for the REPORT)</h2>
+    <p><strong>Goal:</strong> a single denser figure for the paper that combines
+    what would otherwise be several small ones. Style it like the parent's more
+    detailed architecture figures.</p>
+    <p><strong>Prompt:</strong> Three stacked/!adjacent panels in one figure:</p>
+    <ul>
+      <li><strong>(a) Architecture + backprop:</strong> the layer chain
+      <code>input(4096) → Linear → ReLU → Dropout → … → Linear(1) → σ</code> with
+      a forward arrow and a reversed gradient arrow annotated
+      <code>dW = xᵀ·dout</code>, <code>db = Σ dout</code>, <code>dx = dout·Wᵀ</code>,
+      and the loss gradient <code>(σ(z) − y)/N</code>.</li>
+      <li><strong>(b) Correctness:</strong> small inset — analytic vs numerical
+      gradient on a y=x line, "max rel. error &lt; 1e-6".</li>
+      <li><strong>(c) Results:</strong> the training curve (train/val loss + val
+      AUC) and the ROC curve. Source data: <code>history.json</code> and
+      <code>metrics.json</code> from the Kaggle run (also on the HF model repo).</li>
+    </ul>
   </section>
 
-  <section id="fig-mini-3">
-    <h2>Fig M3 — Training curve</h2>
-    <p><strong>Goal:</strong> show learning on the binary task.</p>
-    <p><strong>Prompt:</strong> Line chart of train vs validation BCE loss over
-    epochs, plus a secondary line for validation AUC. Source data:
-    <code>artifacts/history.json</code> from a Kaggle run.</p>
-  </section>
-
-  <section id="fig-mini-4">
-    <h2>Fig M4 — Three-model terminology comparison</h2>
-    <p><strong>Goal:</strong> remove the "from scratch" ambiguity for the grader.</p>
-    <p><strong>Prompt:</strong> Three labelled cards side by side —
-    <em>Custom CNN (random init, PyTorch)</em>,
-    <em>Transfer DenseNet-121 (pretrained, PyTorch)</em>,
-    <em>From-scratch NumPy net (no framework, no autograd) — this repo</em>.
-    For each: framework, autograd yes/no, pretrained yes/no, role in the project.</p>
-  </section>
+  <p><em>Terminology note (put one sentence in the report/deck text, no separate
+  figure needed):</em> "custom CNN (random init, PyTorch)" vs "transfer
+  DenseNet-121 (pretrained, PyTorch)" vs "from-scratch NumPy net (no framework,
+  no autograd) — this repo".</p>
 </body>
 </html>

@@ -41,3 +41,59 @@ def _auc_fallback(scores: np.ndarray, labels: np.ndarray) -> float:
         return float("nan")
     sum_ranks_pos = ranks[labels == 1].sum()
     return float((sum_ranks_pos - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg))
+
+
+def _downsample(values: np.ndarray, max_points: int = 200) -> list[float]:
+    """Evenly subsample a curve to at most ``max_points`` points for compact JSON."""
+    if len(values) <= max_points:
+        return [float(v) for v in values]
+    idx = np.linspace(0, len(values) - 1, max_points).astype(int)
+    return [float(v) for v in values[idx]]
+
+
+def evaluation_report(probs: np.ndarray, targets: np.ndarray, threshold: float = 0.5) -> dict:
+    """Full evaluation bundle for the report/deck figures.
+
+    Returns scalar metrics (AUC, accuracy, precision, recall, specificity, F1),
+    the confusion matrix at ``threshold``, and downsampled ROC and PR curves —
+    everything needed to rebuild clean figures later without re-running the model.
+    """
+    y = targets.reshape(-1).astype(int)
+    p = probs.reshape(-1)
+    preds = (p >= threshold).astype(int)
+
+    tp = int(((preds == 1) & (y == 1)).sum())
+    tn = int(((preds == 0) & (y == 0)).sum())
+    fp = int(((preds == 1) & (y == 0)).sum())
+    fn = int(((preds == 0) & (y == 1)).sum())
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    specificity = tn / (tn + fp) if (tn + fp) else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+
+    roc: dict[str, list[float]] = {"fpr": [], "tpr": []}
+    pr: dict[str, list[float]] = {"precision": [], "recall": []}
+    try:
+        from sklearn.metrics import precision_recall_curve, roc_curve
+
+        fpr, tpr, _ = roc_curve(y, p)
+        prec, rec, _ = precision_recall_curve(y, p)
+        roc = {"fpr": _downsample(fpr), "tpr": _downsample(tpr)}
+        pr = {"precision": _downsample(prec), "recall": _downsample(rec)}
+    except ImportError:
+        pass
+
+    return {
+        "threshold": threshold,
+        "auc": roc_auc(probs, targets),
+        "accuracy": (tp + tn) / len(y) if len(y) else 0.0,
+        "precision": precision,
+        "recall": recall,
+        "specificity": specificity,
+        "f1": f1,
+        "confusion_matrix": {"tn": tn, "fp": fp, "fn": fn, "tp": tp},
+        "roc_curve": roc,
+        "pr_curve": pr,
+        "n_val": int(len(y)),
+        "positive_rate": float(y.mean()) if len(y) else 0.0,
+    }
