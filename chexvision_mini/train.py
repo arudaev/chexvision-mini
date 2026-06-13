@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 from pathlib import Path
 from typing import Any
@@ -69,6 +70,14 @@ def evaluate(model: Sequential, x: np.ndarray, y: np.ndarray) -> dict[str, float
     return {"acc": accuracy(probs, y), "auc": roc_auc(probs, y)}
 
 
+def _cosine_lr(epoch: int, epochs: int, lr0: float, lr_min: float) -> float:
+    """Cosine-annealed learning rate (epoch is 1-indexed)."""
+    if epochs <= 1:
+        return lr0
+    cos = 0.5 * (1.0 + math.cos(math.pi * (epoch - 1) / (epochs - 1)))
+    return lr_min + (lr0 - lr_min) * cos
+
+
 def train(config: dict[str, Any], mode: str, output_dir: Path) -> dict[str, Any]:
     """Run training end to end and persist artifacts to ``output_dir``."""
     set_seed(config["seed"])
@@ -90,45 +99,74 @@ def train(config: dict[str, Any], mode: str, output_dir: Path) -> dict[str, Any]
     )
     print(f"[train] train={x_train.shape} val={x_val.shape} positives={float(y_train.mean()):.3f}")
 
+    # Per-feature standardisation: stats computed on train only, applied to val
+    # once here and to each (augmented) train batch in the loop. Centring/scaling
+    # the inputs is a large convergence win for a fully-connected net.
+    standardize = config["data"].get("standardize", True)
+    if standardize:
+        mean = x_train.mean(axis=0, keepdims=True)
+        std = x_train.std(axis=0, keepdims=True) + 1e-6
+    else:
+        mean = np.zeros((1, x_train.shape[1]))
+        std = np.ones((1, x_train.shape[1]))
+    x_val_norm = (x_val - mean) / std
+
     model = build_mlp(x_train.shape[1], config["model"]["hidden_dims"], config["model"]["dropout"], config["seed"])
     loss_fn = BCEWithLogitsLoss(label_smoothing=tcfg["label_smoothing"])
+    lr0 = tcfg["lr"]
+    lr_min = tcfg.get("lr_min", lr0 * 0.01)
+    schedule = tcfg.get("lr_schedule", "none")
     opt_name = tcfg["optimizer"].lower()
     if opt_name == "adam":
-        optimizer: SGD | Adam = Adam(model, lr=tcfg["lr"], weight_decay=tcfg["weight_decay"])
+        optimizer: SGD | Adam = Adam(model, lr=lr0, weight_decay=tcfg["weight_decay"])
     elif opt_name == "sgd":
-        optimizer = SGD(model, lr=tcfg["lr"], momentum=tcfg["momentum"], weight_decay=tcfg["weight_decay"])
+        optimizer = SGD(model, lr=lr0, momentum=tcfg["momentum"], weight_decay=tcfg["weight_decay"])
     else:
         raise ValueError(f"Unknown optimizer: {opt_name}")
 
-    history: dict[str, list[float]] = {"train_loss": [], "val_loss": [], "val_acc": [], "val_auc": []}
+    history: dict[str, list[float]] = {"train_loss": [], "val_loss": [], "val_acc": [], "val_auc": [], "lr": []}
+    best_auc = -1.0
+    best_state: dict[str, np.ndarray] | None = None
     for epoch in range(1, epochs + 1):
+        if schedule == "cosine":
+            optimizer.lr = _cosine_lr(epoch, epochs, lr0, lr_min)
         epoch_losses = []
         for xb, yb in _iterate_minibatches(x_train, y_train, tcfg["batch_size"], rng):
             if tcfg["augment"]:
                 xb = augment_batch(xb, image_size, rng)
+            if standardize:
+                xb = (xb - mean) / std
             logits = model.forward(xb, training=True)
             epoch_losses.append(loss_fn.forward(logits, yb))
             model.backward(loss_fn.backward())
             optimizer.step()
 
         train_loss = float(np.mean(epoch_losses))
-        val_logits = model.forward(x_val, training=False)
-        val_loss = loss_fn.forward(val_logits, y_val)
-        val_metrics = evaluate(model, x_val, y_val)
+        val_loss = loss_fn.forward(model.forward(x_val_norm, training=False), y_val)
+        val_metrics = evaluate(model, x_val_norm, y_val)
         history["train_loss"].append(train_loss)
         history["val_loss"].append(val_loss)
         history["val_acc"].append(val_metrics["acc"])
         history["val_auc"].append(val_metrics["auc"])
+        history["lr"].append(float(optimizer.lr))
         print(
-            f"[train] epoch {epoch:3d}/{epochs}  train_loss={train_loss:.4f}  "
+            f"[train] epoch {epoch:3d}/{epochs}  lr={optimizer.lr:.2e}  train_loss={train_loss:.4f}  "
             f"val_loss={val_loss:.4f}  val_acc={val_metrics['acc']:.3f}  val_auc={val_metrics['auc']:.3f}"
         )
 
+        # Keep the best checkpoint by val AUC — the last epoch is usually overfit.
+        if not math.isnan(val_metrics["auc"]) and val_metrics["auc"] > best_auc:
+            best_auc = val_metrics["auc"]
+            best_state = {k: v.copy() for k, v in model.state_dict().items()}
+
+    if best_state is None:
+        best_state = model.state_dict()
     output_dir.mkdir(parents=True, exist_ok=True)
-    np.savez(output_dir / "model.npz", **model.state_dict())
+    # Save the best params plus the normalisation stats (needed at inference).
+    np.savez(output_dir / "model.npz", **best_state, _norm_mean=mean, _norm_std=std)
     (output_dir / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
     _save_loss_curve(history, output_dir / "loss_curve.png")
-    print(f"[train] artifacts written to {output_dir}")
+    print(f"[train] best val_auc={best_auc:.4f}; artifacts written to {output_dir}")
     return history
 
 
@@ -143,12 +181,21 @@ def _save_loss_curve(history: dict[str, list[float]], path: Path) -> None:
         return
 
     fig, ax = plt.subplots(figsize=(6, 4))
-    ax.plot(history["train_loss"], label="train loss")
-    ax.plot(history["val_loss"], label="val loss")
+    ax.plot(history["train_loss"], label="train loss", color="tab:blue")
+    ax.plot(history["val_loss"], label="val loss", color="tab:orange")
     ax.set_xlabel("epoch")
     ax.set_ylabel("BCE loss")
     ax.set_title("From-scratch NumPy net — training")
-    ax.legend()
+
+    handles, labels = ax.get_legend_handles_labels()
+    if history.get("val_auc"):
+        ax2 = ax.twinx()
+        (auc_line,) = ax2.plot(history["val_auc"], label="val AUC", color="tab:green", linestyle="--")
+        ax2.set_ylabel("val AUC")
+        handles.append(auc_line)
+        labels.append("val AUC")
+    ax.legend(handles, labels, loc="best")
+
     fig.tight_layout()
     fig.savefig(path, dpi=120)
     plt.close(fig)

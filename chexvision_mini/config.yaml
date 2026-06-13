@@ -3,29 +3,30 @@
 # block under `data.modes` overrides sample counts and epochs for each run mode.
 
 seed: 42
-image_size: 32          # images are downsampled to 32x32 grayscale -> 1024 inputs
+image_size: 64          # images are downsampled to 64x64 grayscale -> 4096 inputs
 
 model:
-  hidden_dims: [256, 64]  # MLP hidden layer widths (Linear -> ReLU per entry)
-  dropout: 0.2            # inverted dropout after each hidden activation
+  hidden_dims: [1024, 256, 64]  # MLP hidden widths (Linear -> ReLU -> Dropout per entry)
+  dropout: 0.3                  # inverted dropout after each hidden activation
 
 training:
-  optimizer: adam         # "adam" or "sgd"
+  optimizer: adam
   lr: 0.001
+  lr_min: 0.00001         # floor for the cosine schedule
+  lr_schedule: cosine     # "cosine" or "none"
   momentum: 0.9           # used only by SGD
   weight_decay: 0.0001    # L2 penalty
   label_smoothing: 0.05
-  batch_size: 64
+  batch_size: 256
   epochs: 20              # overridden per mode below
   augment: true
 
 data:
   dataset_repo: arudaev/chest-xray-14-320
+  standardize: true       # per-feature zero-mean/unit-variance (stats from train)
   modes:
     synthetic: { n_train: 512, n_val: 256, epochs: 15 }
-    local:     { n_train: 400, n_val: 200, epochs: 8 }
-    kaggle:    { n_train: 16000, n_val: 4000, epochs: 40 }
-
-hub:
-  repo_id: arudaev/chexvision-mini
-  upload: false           # set true (or pass --upload) inside the Kaggle kernel
+    local:     { n_train: 600, n_val: 300, epochs: 12 }
+    # Overnight Kaggle CPU run: more data is the bigger lever than more epochs for
+    # an MLP; this plateaus well within the 12h kernel cap (save-best keeps the peak).
+    kaggle:    { n_train: 60000, n_val: 10000, epochs: 200 }
