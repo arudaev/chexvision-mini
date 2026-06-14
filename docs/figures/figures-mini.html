@@ -1,62 +1,78 @@
-<!DOCTYPE html>
-<!--
-  figures-mini.html — DESIGN BRIEF (not the figures themselves).
-
-  Two figures only, mirroring the parent repo's style (see docs/figures in
-  chexvision). They are OPTIONAL — to be produced by the design tooling and dropped
-  into the report / deck *only if* we decide the from-scratch net needs a
-  dedicated figure there. The GitHub README already carries Mermaid diagrams, so
-  these are not required for the repo itself.
-
-  - Fig 1 (slide deck): a single concise pipeline flowchart.
-  - Fig 2 (report): one comprehensive figure (architecture + backprop + results).
-
-  Do NOT hand-author four separate figures into both the report and the deck.
--->
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>chexvision-mini — Figures Design Brief (2 figures)</title>
+<meta charset="utf-8">
+<title>chexvision-mini — Report Figures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#20242c; --mut:#737a88; --hair:#e2e6ec; --paper:#ffffff;
+    --bg:#eef1f5;
+  }
+  html,body{margin:0;background:var(--bg);font-family:'Inter',sans-serif;color:var(--ink);}
+  .wrap{max-width:1780px;margin:0 auto;padding:56px 40px 120px;}
+  header.page{margin-bottom:44px;}
+  header.page .kick{font:600 12px 'JetBrains Mono',monospace;letter-spacing:2px;text-transform:uppercase;color:var(--mut);}
+  header.page h1{font-size:30px;font-weight:700;letter-spacing:-0.02em;margin:10px 0 6px;}
+  header.page p{font-size:15px;color:var(--mut);max-width:820px;line-height:1.5;margin:0;}
+  .plate{background:var(--paper);border:1px solid var(--hair);border-radius:14px;
+    box-shadow:0 1px 2px rgba(20,30,50,0.04),0 8px 30px rgba(20,30,50,0.05);
+    margin-bottom:40px;overflow:hidden;}
+  .plate .fig{padding:30px 34px 14px;}
+  .plate .cap{border-top:1px solid var(--hair);background:#fbfcfd;padding:16px 34px 18px;
+    font-size:13.5px;line-height:1.55;color:#48505e;}
+  .plate .cap b{color:var(--ink);font-weight:700;}
+  .plate .tag{font:600 11px 'JetBrains Mono',monospace;letter-spacing:1.4px;text-transform:uppercase;color:var(--mut);
+    display:block;margin-bottom:5px;}
+  /* export isolation: ?export=1 (or 2) renders only that plate, white bg, tight */
+  html.export-html{background:#ffffff;}
+  body.export{background:#ffffff;min-height:100vh;}
+  body.export .wrap{padding:0;max-width:none;}
+  body.export header.page,body.export .cap{display:none;}
+  body.export .plate{border:0;border-radius:0;box-shadow:none;margin:0;display:none;}
+  body.export .plate.show{display:block;}
+  body.export .plate.show .fig{padding:18px 18px;}
+</style>
 </head>
 <body>
-  <h1>Figures design brief for the design tooling (optional, 2 figures)</h1>
+<div class="wrap">
+  <header class="page">
+    <div class="kick">chexvision-mini · Deep Learning &amp; Big Data</div>
+    <h1>From-scratch figures</h1>
+    <p>Two publication figures for the pure-NumPy companion to CheXVision — a neural network built by hand: forward pass, backprop, optimizers, all without a framework or autograd. Same visual system as the parent figure family — restrained slate-blue feature pathway, coral reserved for the backward pass and the correctness proof. Inter + JetBrains Mono throughout.</p>
+  </header>
 
-  <section id="fig-mini-1">
-    <h2>Fig 1 — Pipeline flowchart (for the SLIDE DECK)</h2>
-    <p><strong>Goal:</strong> one clean, glanceable flowchart of the whole
-    from-scratch pipeline — the deck version. Style it like the parent's
-    <code>fig1_pipeline</code>.</p>
-    <p><strong>Prompt:</strong> Left-to-right flow:
-    <code>NIH ChestX-ray14 (320px) → stream + downsample to 64×64 grayscale →
-    standardize → MLP (4096→1024→256→64→1) → BCE-with-logits → backprop
-    (hand-derived) → Adam + cosine LR</code>, with a feedback arrow from the
-    optimizer back to the MLP, and a branch to <code>validation metrics
-    (AUC / accuracy / F1)</code>. Minimal labels, one accent colour.</p>
+  <section class="plate" id="plate1">
+    <div class="fig"><div id="fig1"></div></div>
+    <div class="cap"><span class="tag">Figure 1</span><b>End-to-end pipeline.</b> Top lane: each X-ray is streamed from Hugging Face, downsampled to 64×64 grayscale, flattened to 4096 numbers, and standardized. Bottom lane: the per-mini-batch loop — MLP forward, BCE-with-logits, hand-derived backprop, an Adam + cosine step — repeated, with the best epoch kept after a validation pass. Pure NumPy, CPU only.</div>
   </section>
 
-  <section id="fig-mini-2">
-    <h2>Fig 2 — Comprehensive figure (for the REPORT)</h2>
-    <p><strong>Goal:</strong> a single denser figure for the paper that combines
-    what would otherwise be several small ones. Style it like the parent's more
-    detailed architecture figures.</p>
-    <p><strong>Prompt:</strong> Three stacked/!adjacent panels in one figure:</p>
-    <ul>
-      <li><strong>(a) Architecture + backprop:</strong> the layer chain
-      <code>input(4096) → Linear → ReLU → Dropout → … → Linear(1) → σ</code> with
-      a forward arrow and a reversed gradient arrow annotated
-      <code>dW = xᵀ·dout</code>, <code>db = Σ dout</code>, <code>dx = dout·Wᵀ</code>,
-      and the loss gradient <code>(σ(z) − y)/N</code>.</li>
-      <li><strong>(b) Correctness:</strong> small inset — analytic vs numerical
-      gradient on a y=x line, "max rel. error &lt; 1e-6".</li>
-      <li><strong>(c) Results:</strong> the training curve (train/val loss + val
-      AUC) and the ROC curve. Source data: <code>history.json</code> and
-      <code>metrics.json</code> from the Kaggle run (also on the HF model repo).</li>
-    </ul>
+  <section class="plate" id="plate2">
+    <div class="fig"><div id="fig2"></div></div>
+    <div class="cap"><span class="tag">Figure 2</span><b>Architecture &amp; hand-derived backprop.</b> The MLP compresses 4096 inputs through three <code>Linear · ReLU · Dropout</code> blocks to a single logit, then a sigmoid + BCE-with-logits loss. The coral pass returns the gradient by the chain rule — entry gradient <code>(σ(z) − y)/N</code>, and per-layer <code>dW = xᵀ·dout</code>, <code>db = Σ dout</code>, <code>dx = dout·Wᵀ</code> — every one derived by hand and confirmed against a finite-difference check to &lt; 1e-6.</div>
   </section>
+</div>
 
-  <p><em>Terminology note (put one sentence in the report/deck text, no separate
-  figure needed):</em> "custom CNN (random init, PyTorch)" vs "transfer
-  DenseNet-121 (pretrained, PyTorch)" vs "from-scratch NumPy net (no framework,
-  no autograd) — this repo".</p>
+<script src="figlib.js"></script>
+<script src="mini_fig1_pipeline.js"></script>
+<script src="mini_fig2_backprop.js"></script>
+<script>
+  function drawAll(){
+    try{ window.drawMiniFig1 && drawMiniFig1('fig1'); }catch(e){ console.error('fig1',e); }
+    try{ window.drawMiniFig2 && drawMiniFig2('fig2'); }catch(e){ console.error('fig2',e); }
+  }
+  const params = new URLSearchParams(location.search);
+  const ex = params.get('export');
+  if(ex){
+    document.documentElement.classList.add('export-html');
+    document.body.classList.add('export');
+    const p = document.getElementById('plate'+ex);
+    if(p) p.classList.add('show');
+  }
+  if(document.fonts && document.fonts.ready){ document.fonts.ready.then(drawAll); }
+  drawAll();
+</script>
 </body>
 </html>
