@@ -29,7 +29,7 @@ flowchart LR
 
 ---
 
-# Reading guide (start here, teammates)
+# Reading guide
 
 You can understand this whole codebase in one sitting if you read the files in
 the order below. Each step is one concept, in plain language, with the exact file
