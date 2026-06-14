@@ -29,7 +29,10 @@ flowchart LR
 
 ---
 
-# Reading guide
+<details>
+<summary><b>📖 Reading guide — learn the whole codebase in one sitting (click to expand)</b></summary>
+
+<br>
 
 You can understand this whole codebase in one sitting if you read the files in
 the order below. Each step is one concept, in plain language, with the exact file
@@ -130,6 +133,8 @@ Read `train()` top to bottom; it ties every previous step together:
   per-mode sample counts).
 - `card.py` — renders the Hugging Face model card from the results.
 - `docs/nnfs_alignment.md` — maps each NNFS book chapter to the file above.
+
+</details>
 
 ---
 
