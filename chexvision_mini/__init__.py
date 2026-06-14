@@ -12,9 +12,10 @@ from __future__ import annotations
 from .gradcheck import gradient_check
 from .layers import Linear, ReLU, Sigmoid
 from .losses import BCEWithLogitsLoss, sigmoid
+from .metrics import best_threshold
 from .network import Sequential
-from .optim import SGD, Adam
-from .regularizers import Dropout, l2_penalty
+from .optim import SGD, Adam, RMSProp
+from .regularizers import Dropout, l1_penalty, l2_penalty
 
 __all__ = [
     "SGD",
@@ -22,10 +23,13 @@ __all__ = [
     "BCEWithLogitsLoss",
     "Dropout",
     "Linear",
+    "RMSProp",
     "ReLU",
     "Sequential",
     "Sigmoid",
+    "best_threshold",
     "gradient_check",
+    "l1_penalty",
     "l2_penalty",
     "sigmoid",
 ]

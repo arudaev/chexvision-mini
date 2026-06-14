@@ -22,6 +22,8 @@ class Dropout(Layer):
 
     def __init__(self, p: float = 0.5, *, seed: int | None = None) -> None:
         super().__init__()
+        if not 0.0 <= p < 1.0:
+            raise ValueError(f"dropout p must be in [0, 1), got {p}")
         self.p = p
         self.rng = np.random.default_rng(seed)
         self._mask: np.ndarray | None = None
@@ -43,8 +45,8 @@ def l2_penalty(model, weight_decay: float) -> float:
     """Return the L2 penalty ``0.5 * wd * sum(W**2)`` over weight matrices only.
 
     Biases are excluded by convention — penalising them does not curb model
-    complexity and can hurt fit. ``model`` is any object exposing
-    ``params_and_grads()`` (see :class:`chexvision_mini.network.Sequential`).
+    complexity and can hurt fit. This matches the weights-only regularisation in
+    :mod:`chexvision_mini.optim`. ``model`` exposes ``params_and_grads()``.
     """
     if weight_decay == 0.0:
         return 0.0
@@ -53,3 +55,17 @@ def l2_penalty(model, weight_decay: float) -> float:
         if name == "W":
             total += float((param**2).sum())
     return 0.5 * weight_decay * total
+
+
+def l1_penalty(model, l1: float) -> float:
+    """Return the L1 penalty ``l1 * sum(|W|)`` over weight matrices only.
+
+    Gradient ``l1 * sign(W)`` is applied in :mod:`chexvision_mini.optim`.
+    """
+    if l1 == 0.0:
+        return 0.0
+    total = 0.0
+    for (_, name), param, _ in model.params_and_grads():
+        if name == "W":
+            total += float(np.abs(param).sum())
+    return l1 * total

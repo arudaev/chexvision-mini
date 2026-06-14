@@ -16,8 +16,10 @@ from chexvision_mini import (
     Dropout,
     Linear,
     ReLU,
+    RMSProp,
     Sequential,
     Sigmoid,
+    best_threshold,
     gradient_check,
 )
 
@@ -105,3 +107,19 @@ def test_sgd_overfits_tiny_batch() -> None:
 
 def test_adam_overfits_tiny_batch() -> None:
     assert _train_until(Adam, lr=0.05) < 0.1
+
+
+def test_rmsprop_overfits_tiny_batch() -> None:
+    assert _train_until(RMSProp, lr=0.01) < 0.1
+
+
+def test_best_threshold_in_range_and_separates() -> None:
+    rng = np.random.default_rng(0)
+    # well-separated scores: positives high, negatives low
+    probs = np.concatenate([rng.uniform(0.6, 1.0, 50), rng.uniform(0.0, 0.4, 50)]).reshape(-1, 1)
+    targets = np.concatenate([np.ones(50), np.zeros(50)]).reshape(-1, 1)
+    thr = best_threshold(probs, targets)
+    assert 0.0 <= thr <= 1.0
+    # on perfectly separable scores the Youden threshold separates the classes
+    preds = (probs >= thr).astype(float)
+    assert float((preds == targets).mean()) == 1.0

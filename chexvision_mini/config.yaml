@@ -10,12 +10,13 @@ model:
   dropout: 0.3                  # inverted dropout after each hidden activation
 
 training:
-  optimizer: adam
+  optimizer: adam         # "adam", "rmsprop", or "sgd"
   lr: 0.001
   lr_min: 0.00001         # floor for the cosine schedule
   lr_schedule: cosine     # "cosine" or "none"
   momentum: 0.9           # used only by SGD
-  weight_decay: 0.0001    # L2 penalty
+  weight_decay: 0.0001    # L2 penalty (weights only)
+  l1: 0.0                 # L1 penalty (weights only); 0 disables
   label_smoothing: 0.05
   batch_size: 256
   epochs: 20              # overridden per mode below
@@ -25,8 +26,9 @@ data:
   dataset_repo: arudaev/chest-xray-14-320
   standardize: true       # per-feature zero-mean/unit-variance (stats from train)
   modes:
-    synthetic: { n_train: 512, n_val: 256, epochs: 15 }
-    local:     { n_train: 600, n_val: 300, epochs: 12 }
+    # train / validation (model selection) / test (untouched, final eval)
+    synthetic: { n_train: 512, n_val: 256, n_test: 256, epochs: 15 }
+    local:     { n_train: 600, n_val: 300, n_test: 300, epochs: 12 }
     # Overnight Kaggle CPU run: more data is the bigger lever than more epochs for
     # an MLP; this plateaus well within the 12h kernel cap (save-best keeps the peak).
-    kaggle:    { n_train: 60000, n_val: 10000, epochs: 200 }
+    kaggle:    { n_train: 60000, n_val: 10000, n_test: 10000, epochs: 200 }

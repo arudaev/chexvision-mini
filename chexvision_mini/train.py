@@ -20,13 +20,13 @@ import numpy as np
 
 from .augment import augment_batch
 from .card import render_model_card
-from .data import load_xray_subset
+from .data import DATASET_REVISION, load_xray_subset
 from .layers import Linear, ReLU
 from .losses import BCEWithLogitsLoss, sigmoid
-from .metrics import accuracy, evaluation_report, roc_auc
+from .metrics import accuracy, best_threshold, evaluation_report, roc_auc
 from .network import Sequential
-from .optim import SGD, Adam
-from .regularizers import Dropout
+from .optim import SGD, Adam, RMSProp
+from .regularizers import Dropout, l1_penalty, l2_penalty
 
 CONFIG_PATH = Path(__file__).with_name("config.yaml")
 
@@ -98,7 +98,16 @@ def train(config: dict[str, Any], mode: str, output_dir: Path) -> dict[str, Any]
         split="validation" if mode != "synthetic" else "train",
         seed=config["seed"] + 1, dataset_repo=config["data"]["dataset_repo"],
     )
-    print(f"[train] train={x_train.shape} val={x_val.shape} positives={float(y_train.mean()):.3f}")
+    # Untouched final split: used ONCE after model + threshold selection.
+    x_test, y_test = load_xray_subset(
+        mode, mode_cfg["n_test"], image_size=image_size,
+        split="test" if mode != "synthetic" else "train",
+        seed=config["seed"] + 2, dataset_repo=config["data"]["dataset_repo"],
+    )
+    print(
+        f"[train] train={x_train.shape} val={x_val.shape} test={x_test.shape} "
+        f"pos(train/val/test)={float(y_train.mean()):.3f}/{float(y_val.mean()):.3f}/{float(y_test.mean()):.3f}"
+    )
 
     # Per-feature standardisation: stats computed on train only, applied to val
     # once here and to each (augmented) train batch in the loop. Centring/scaling
@@ -111,21 +120,28 @@ def train(config: dict[str, Any], mode: str, output_dir: Path) -> dict[str, Any]
         mean = np.zeros((1, x_train.shape[1]))
         std = np.ones((1, x_train.shape[1]))
     x_val_norm = (x_val - mean) / std
+    x_test_norm = (x_test - mean) / std
 
     model = build_mlp(x_train.shape[1], config["model"]["hidden_dims"], config["model"]["dropout"], config["seed"])
     loss_fn = BCEWithLogitsLoss(label_smoothing=tcfg["label_smoothing"])
     lr0 = tcfg["lr"]
     lr_min = tcfg.get("lr_min", lr0 * 0.01)
     schedule = tcfg.get("lr_schedule", "none")
+    wd = tcfg["weight_decay"]
+    l1 = tcfg.get("l1", 0.0)
     opt_name = tcfg["optimizer"].lower()
     if opt_name == "adam":
-        optimizer: SGD | Adam = Adam(model, lr=lr0, weight_decay=tcfg["weight_decay"])
+        optimizer: SGD | Adam | RMSProp = Adam(model, lr=lr0, weight_decay=wd, l1=l1)
+    elif opt_name == "rmsprop":
+        optimizer = RMSProp(model, lr=lr0, weight_decay=wd, l1=l1)
     elif opt_name == "sgd":
-        optimizer = SGD(model, lr=lr0, momentum=tcfg["momentum"], weight_decay=tcfg["weight_decay"])
+        optimizer = SGD(model, lr=lr0, momentum=tcfg["momentum"], weight_decay=wd, l1=l1)
     else:
         raise ValueError(f"Unknown optimizer: {opt_name}")
 
-    history: dict[str, list[float]] = {"train_loss": [], "val_loss": [], "val_acc": [], "val_auc": [], "lr": []}
+    history: dict[str, list[float]] = {
+        "train_loss": [], "reg_loss": [], "val_loss": [], "val_acc": [], "val_auc": [], "lr": []
+    }
     best_auc = -1.0
     best_state: dict[str, np.ndarray] | None = None
     for epoch in range(1, epochs + 1):
@@ -143,9 +159,11 @@ def train(config: dict[str, Any], mode: str, output_dir: Path) -> dict[str, Any]
             optimizer.step()
 
         train_loss = float(np.mean(epoch_losses))
+        reg_loss = l2_penalty(model, wd) + l1_penalty(model, l1)
         val_loss = loss_fn.forward(model.forward(x_val_norm, training=False), y_val)
         val_metrics = evaluate(model, x_val_norm, y_val)
         history["train_loss"].append(train_loss)
+        history["reg_loss"].append(reg_loss)
         history["val_loss"].append(val_loss)
         history["val_acc"].append(val_metrics["acc"])
         history["val_auc"].append(val_metrics["auc"])
@@ -165,19 +183,33 @@ def train(config: dict[str, Any], mode: str, output_dir: Path) -> dict[str, Any]
     model.load_state_dict(best_state)  # evaluate/report the BEST checkpoint
 
     val_probs = sigmoid(model.forward(x_val_norm, training=False))
-    report = evaluation_report(val_probs, y_val)
+    test_probs = sigmoid(model.forward(x_test_norm, training=False))
+    # Operating threshold chosen on VALIDATION only (Youden's J), then applied
+    # unchanged to the untouched TEST split for the final reported metrics.
+    threshold = best_threshold(val_probs, y_val)
+    val_report = evaluation_report(val_probs, y_val, threshold=threshold)
+    test_report = evaluation_report(test_probs, y_test, threshold=threshold)
     aucs = np.array(history["val_auc"], dtype=float)
     best_epoch = int(np.nanargmax(aucs)) + 1 if np.isfinite(aucs).any() else len(aucs)
+
+    def _counts(y: np.ndarray) -> dict[str, int]:
+        y = y.reshape(-1)
+        pos = int(y.sum())
+        return {"n": int(len(y)), "pos": pos, "neg": int(len(y) - pos)}
 
     output_dir.mkdir(parents=True, exist_ok=True)
     # Best params + normalisation stats (needed at inference).
     np.savez(output_dir / "model.npz", **best_state, _norm_mean=mean, _norm_std=std)
-    # Raw validation scores/labels — lets any ROC/PR/threshold figure be rebuilt.
+    # Raw scores/labels — lets any ROC/PR/threshold figure be rebuilt cleanly.
     np.save(output_dir / "val_scores.npy", val_probs.reshape(-1))
     np.save(output_dir / "val_labels.npy", y_val.reshape(-1))
+    np.save(output_dir / "test_scores.npy", test_probs.reshape(-1))
+    np.save(output_dir / "test_labels.npy", y_test.reshape(-1))
     (output_dir / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
     metrics_out = {
         "best_epoch": best_epoch,
+        "threshold": threshold,
+        "label_map": {"0": "normal", "1": "abnormal"},
         "config": {
             "image_size": image_size,
             "hidden_dims": config["model"]["hidden_dims"],
@@ -185,23 +217,29 @@ def train(config: dict[str, Any], mode: str, output_dir: Path) -> dict[str, Any]
             "optimizer": tcfg["optimizer"],
             "lr": tcfg["lr"],
             "lr_schedule": tcfg.get("lr_schedule", "none"),
-            "weight_decay": tcfg["weight_decay"],
+            "weight_decay": wd,
+            "l1": l1,
             "label_smoothing": tcfg["label_smoothing"],
             "batch_size": tcfg["batch_size"],
             "epochs": epochs,
-            "n_train": int(x_train.shape[0]),
-            "n_val": int(x_val.shape[0]),
             "augment": tcfg["augment"],
             "standardize": standardize,
+            "dataset_revision": DATASET_REVISION,
         },
-        **report,
+        "splits": {"train": _counts(y_train), "val": _counts(y_val), "test": _counts(y_test)},
+        "validation": val_report,
+        "test": test_report,
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics_out, indent=2), encoding="utf-8")
     (output_dir / "README.md").write_text(
-        render_model_card(report, config, best_epoch, epochs), encoding="utf-8"
+        render_model_card(metrics_out, config, best_epoch, epochs), encoding="utf-8"
     )
     _save_loss_curve(history, output_dir / "loss_curve.png")
-    print(f"[train] best val_auc={best_auc:.4f} (epoch {best_epoch}); artifacts -> {output_dir}")
+    print(
+        f"[train] best val_auc={best_auc:.4f} (epoch {best_epoch}); thr={threshold:.3f}; "
+        f"TEST auc={test_report['auc']:.4f} f1={test_report['f1']:.4f} acc={test_report['accuracy']:.4f}; "
+        f"artifacts -> {output_dir}"
+    )
     return history
 
 

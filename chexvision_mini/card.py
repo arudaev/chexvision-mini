@@ -13,9 +13,18 @@ def _fmt(value: float) -> str:
     return "n/a" if value != value else f"{value:.4f}"  # NaN-safe
 
 
-def render_model_card(metrics: dict[str, Any], config: dict[str, Any], best_epoch: int, epochs: int) -> str:
-    """Return the Markdown model card (with HF frontmatter)."""
-    cm = metrics["confusion_matrix"]
+def render_model_card(meta: dict[str, Any], config: dict[str, Any], best_epoch: int, epochs: int) -> str:
+    """Return the Markdown model card (with HF frontmatter).
+
+    ``meta`` is the full metrics bundle written to ``metrics.json`` — it has
+    ``test`` (final, headline), ``validation`` (model-selection), ``threshold``,
+    and ``splits``.
+    """
+    test = meta["test"]
+    val = meta["validation"]
+    cm = test["confusion_matrix"]
+    thr = meta["threshold"]
+    splits = meta["splits"]
     hidden = " → ".join(str(h) for h in config["model"]["hidden_dims"])
     image_size = config["image_size"]
     inputs = image_size * image_size
@@ -44,47 +53,51 @@ custom CNN + a DenseNet-121 transfer model). This model demonstrates the
 checking. It is intentionally a fundamentals demo: the headline performance
 belongs to the PyTorch models (DenseNet binary AUC ≈ 0.787), not to this MLP.
 
-## Results (validation)
+## Results — held-out test set (final)
 
-| Metric | Value |
-|---|---|
-| ROC-AUC | **{_fmt(metrics['auc'])}** |
-| Accuracy | {_fmt(metrics['accuracy'])} |
-| Precision | {_fmt(metrics['precision'])} |
-| Recall (sensitivity) | {_fmt(metrics['recall'])} |
-| Specificity | {_fmt(metrics['specificity'])} |
-| F1 | {_fmt(metrics['f1'])} |
+Metrics on an **untouched test split**, at an operating threshold chosen on the
+validation set only (Youden's J = {thr:.3f}). ROC-AUC is threshold-independent.
 
-Selected by best validation AUC (epoch {best_epoch}/{epochs}); validation
-n={metrics['n_val']}, positive rate {_fmt(metrics['positive_rate'])}.
+| Metric | Test | Validation |
+|---|---|---|
+| ROC-AUC | **{_fmt(test['auc'])}** | {_fmt(val['auc'])} |
+| Accuracy | {_fmt(test['accuracy'])} | {_fmt(val['accuracy'])} |
+| Precision | {_fmt(test['precision'])} | {_fmt(val['precision'])} |
+| Recall (sensitivity) | {_fmt(test['recall'])} | {_fmt(val['recall'])} |
+| Specificity | {_fmt(test['specificity'])} | {_fmt(val['specificity'])} |
+| F1 | {_fmt(test['f1'])} | {_fmt(val['f1'])} |
 
-Confusion matrix @ threshold {metrics['threshold']}: TN={cm['tn']}, FP={cm['fp']}, FN={cm['fn']}, TP={cm['tp']}.
+Checkpoint selected by best validation AUC (epoch {best_epoch}/{epochs}).
+Samples — train {splits['train']['n']}, val {splits['val']['n']}, test {splits['test']['n']}
+(test positive rate {_fmt(test['positive_rate'])}).
+Test confusion matrix @ {thr:.3f}: TN={cm['tn']}, FP={cm['fp']}, FN={cm['fn']}, TP={cm['tp']}.
 
 ## Architecture
 
 MLP on {image_size}×{image_size} grayscale images: **{inputs} → {hidden} → 1** logit,
 ReLU activations, dropout {config['model']['dropout']}, He initialisation.
 Loss: BCE-with-logits (+ label smoothing {config['training']['label_smoothing']}).
-Optimizer: {config['training']['optimizer']} with cosine LR decay.
-Per-feature standardisation; augmentation: horizontal flip / noise / brightness.
+Optimizer: {config['training']['optimizer']} with cosine LR decay; L2 weight decay
+(weights only). Per-feature standardisation; augmentation: h-flip / noise / brightness.
 
 ## Files
 
 - `model.npz` — best weights + normalisation stats (`_norm_mean`, `_norm_std`).
-- `history.json` — per-epoch train/val loss, val accuracy/AUC, learning rate.
-- `metrics.json` — ROC & PR curves, confusion matrix, scalar metrics (for figures).
-- `val_scores.npy` / `val_labels.npy` — raw validation scores + labels.
+- `metrics.json` — test & validation metrics, ROC/PR curves, confusion matrices, config.
+- `history.json` — per-epoch train/reg/val loss, val accuracy/AUC, learning rate.
+- `val_scores.npy` / `val_labels.npy`, `test_scores.npy` / `test_labels.npy` — raw scores + labels.
 - `loss_curve.png` — training curves + val AUC.
 
 ## Usage
 
 ```python
-import numpy as np
-ckpt = np.load("model.npz")
-mean, std = ckpt["_norm_mean"], ckpt["_norm_std"]
-# rebuild the MLP from chexvision_mini, load the layer weights, standardise
-# inputs with (x - mean) / std, then forward(...). See the repo for details.
+from chexvision_mini.inference import load_checkpoint, preprocess_image, predict_label
+model, mean, std, threshold = load_checkpoint("artifacts")
+x = preprocess_image("xray.png", image_size={image_size}, mean=mean, std=std)
+prob, label = predict_label(model, x, threshold)   # P(abnormal), "normal"/"abnormal"
 ```
+
+Or from the CLI: `python -m chexvision_mini predict --checkpoint artifacts --image xray.png`.
 
 ## Links
 

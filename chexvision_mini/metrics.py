@@ -43,6 +43,25 @@ def _auc_fallback(scores: np.ndarray, labels: np.ndarray) -> float:
     return float((sum_ranks_pos - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg))
 
 
+def best_threshold(probs: np.ndarray, targets: np.ndarray) -> float:
+    """Operating threshold that maximises Youden's J (= TPR − FPR) on these data.
+
+    Chosen on validation only; the 0.5 default is heavily skewed toward the
+    majority class when prevalence is not 50/50.
+    """
+    y = targets.reshape(-1)
+    p = probs.reshape(-1)
+    if len(np.unique(y)) < 2:
+        return 0.5
+    try:
+        from sklearn.metrics import roc_curve
+    except ImportError:
+        return 0.5
+    fpr, tpr, thr = roc_curve(y, p)
+    thr = np.clip(thr, 0.0, 1.0)
+    return float(thr[int(np.argmax(tpr - fpr))])
+
+
 def _downsample(values: np.ndarray, max_points: int = 200) -> list[float]:
     """Evenly subsample a curve to at most ``max_points`` points for compact JSON."""
     if len(values) <= max_points:

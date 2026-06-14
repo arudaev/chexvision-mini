@@ -11,7 +11,7 @@ so this companion implements the maths by hand in NumPy. It is a fundamentals
 demonstration and does not produce the headline AUC numbers.
 
 ## 2. Architecture
-A multilayer perceptron on 32×32 grayscale chest X-rays (1024 inputs),
+A multilayer perceptron on 64×64 grayscale chest X-rays (4096 inputs),
 `[Linear → ReLU → Dropout] × k → Linear(1)`, producing a single logit for the
 binary *normal vs abnormal* task. Weights use He initialisation.
 
