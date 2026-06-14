@@ -62,6 +62,7 @@ validation set only (Youden's J = {thr:.3f}). ROC-AUC is threshold-independent.
 |---|---|---|
 | ROC-AUC | **{_fmt(test['auc'])}** | {_fmt(val['auc'])} |
 | Accuracy | {_fmt(test['accuracy'])} | {_fmt(val['accuracy'])} |
+| Balanced accuracy | {_fmt(test['balanced_accuracy'])} | {_fmt(val['balanced_accuracy'])} |
 | Precision | {_fmt(test['precision'])} | {_fmt(val['precision'])} |
 | Recall (sensitivity) | {_fmt(test['recall'])} | {_fmt(val['recall'])} |
 | Specificity | {_fmt(test['specificity'])} | {_fmt(val['specificity'])} |
@@ -71,6 +72,12 @@ Checkpoint selected by best validation AUC (epoch {best_epoch}/{epochs}).
 Samples — train {splits['train']['n']}, val {splits['val']['n']}, test {splits['test']['n']}
 (test positive rate {_fmt(test['positive_rate'])}).
 Test confusion matrix @ {thr:.3f}: TN={cm['tn']}, FP={cm['fp']}, FN={cm['fn']}, TP={cm['tp']}.
+
+> **Note on the test split:** NIH ChestX-ray14's official `test` split is more
+> positive-heavy ({_fmt(test['positive_rate'])}) than train/validation
+> ({_fmt(val['positive_rate'])}). Because of that base-rate shift, plain accuracy
+> can mislead — **ROC-AUC (threshold-independent) and balanced accuracy are the
+> metrics to trust** for comparison.
 
 ## Architecture
 

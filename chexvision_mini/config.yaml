@@ -26,9 +26,12 @@ data:
   dataset_repo: arudaev/chest-xray-14-320
   standardize: true       # per-feature zero-mean/unit-variance (stats from train)
   modes:
-    # train / validation (model selection) / test (untouched, final eval)
-    synthetic: { n_train: 512, n_val: 256, n_test: 256, epochs: 15 }
-    local:     { n_train: 600, n_val: 300, n_test: 300, epochs: 12 }
+    # train / validation (model selection) / test (untouched, final eval).
+    # shuffle_buffer randomises the HF stream before take() so each subset is a
+    # representative, class-balanced sample (the parquet shards are label-ordered).
+    # It scales with subset size — a big buffer would make `local` needlessly slow.
+    synthetic: { n_train: 512, n_val: 256, n_test: 256, epochs: 15, shuffle_buffer: 0 }
+    local:     { n_train: 600, n_val: 300, n_test: 300, epochs: 12, shuffle_buffer: 3000 }
     # Overnight Kaggle CPU run: more data is the bigger lever than more epochs for
     # an MLP; this plateaus well within the 12h kernel cap (save-best keeps the peak).
-    kaggle:    { n_train: 60000, n_val: 10000, n_test: 10000, epochs: 200 }
+    kaggle:    { n_train: 60000, n_val: 10000, n_test: 10000, epochs: 200, shuffle_buffer: 30000 }

@@ -106,6 +106,9 @@ def evaluation_report(probs: np.ndarray, targets: np.ndarray, threshold: float =
         "threshold": threshold,
         "auc": roc_auc(probs, targets),
         "accuracy": (tp + tn) / len(y) if len(y) else 0.0,
+        # Balanced accuracy = mean(recall, specificity): robust to class imbalance,
+        # so it stays meaningful when the test prevalence differs from train/val.
+        "balanced_accuracy": (recall + specificity) / 2,
         "precision": precision,
         "recall": recall,
         "specificity": specificity,

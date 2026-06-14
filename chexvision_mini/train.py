@@ -88,21 +88,25 @@ def train(config: dict[str, Any], mode: str, output_dir: Path) -> dict[str, Any]
     tcfg = config["training"]
     epochs = mode_cfg["epochs"]
 
-    print(f"[train] mode={mode} image_size={image_size} epochs={epochs}")
+    shuffle_buffer = mode_cfg.get("shuffle_buffer", 0)
+    print(f"[train] mode={mode} image_size={image_size} epochs={epochs} shuffle_buffer={shuffle_buffer}")
     x_train, y_train = load_xray_subset(
         mode, mode_cfg["n_train"], image_size=image_size, split="train",
         seed=config["seed"], dataset_repo=config["data"]["dataset_repo"],
+        shuffle_buffer=shuffle_buffer,
     )
     x_val, y_val = load_xray_subset(
         mode, mode_cfg["n_val"], image_size=image_size,
         split="validation" if mode != "synthetic" else "train",
         seed=config["seed"] + 1, dataset_repo=config["data"]["dataset_repo"],
+        shuffle_buffer=shuffle_buffer,
     )
     # Untouched final split: used ONCE after model + threshold selection.
     x_test, y_test = load_xray_subset(
         mode, mode_cfg["n_test"], image_size=image_size,
         split="test" if mode != "synthetic" else "train",
         seed=config["seed"] + 2, dataset_repo=config["data"]["dataset_repo"],
+        shuffle_buffer=shuffle_buffer,
     )
     print(
         f"[train] train={x_train.shape} val={x_val.shape} test={x_test.shape} "
@@ -147,18 +151,21 @@ def train(config: dict[str, Any], mode: str, output_dir: Path) -> dict[str, Any]
     for epoch in range(1, epochs + 1):
         if schedule == "cosine":
             optimizer.lr = _cosine_lr(epoch, epochs, lr0, lr_min)
-        epoch_losses = []
+        epoch_loss_sum = 0.0
+        epoch_n = 0
         for xb, yb in _iterate_minibatches(x_train, y_train, tcfg["batch_size"], rng):
             if tcfg["augment"]:
                 xb = augment_batch(xb, image_size, rng)
             if standardize:
                 xb = (xb - mean) / std
             logits = model.forward(xb, training=True)
-            epoch_losses.append(loss_fn.forward(logits, yb))
+            # Sample-weighted so the final partial batch is not over-counted.
+            epoch_loss_sum += loss_fn.forward(logits, yb) * len(yb)
+            epoch_n += len(yb)
             model.backward(loss_fn.backward())
             optimizer.step()
 
-        train_loss = float(np.mean(epoch_losses))
+        train_loss = float(epoch_loss_sum / epoch_n)
         reg_loss = l2_penalty(model, wd) + l1_penalty(model, l1)
         val_loss = loss_fn.forward(model.forward(x_val_norm, training=False), y_val)
         val_metrics = evaluate(model, x_val_norm, y_val)
