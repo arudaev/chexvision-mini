@@ -182,6 +182,33 @@ pytest tests/ -v                             # gradient check + training tests
 python -m chexvision_mini predict --checkpoint artifacts --image xray.png
 ```
 
+## Run modes
+
+There are two independent axes: the `--mode` flag (which **data**) and **where**
+the code runs. All three use the same `train.py` pipeline — pure NumPy, CPU-only;
+only the data source, size, and machine differ.
+
+| | `--mode synthetic` | `--mode local` | Kaggle dispatch (`--mode kaggle`) |
+|---|---|---|---|
+| **Runs on** | your machine | your machine | Kaggle's CPU kernel (remote) |
+| **Data** | fake, generated in NumPy | **real** X-rays, streamed from HF | **real** X-rays, streamed from HF |
+| **Network needed?** | no (fully offline) | yes (HF streaming) | yes (inside the kernel) |
+| **Size** (train/val/test) | 512 / 256 / 256 | 600 / 300 / 300 | 60k / 10k / 10k |
+| **Epochs** | 15 | 12 | 200 |
+| **Time** | seconds | a few minutes | ~4 hours |
+| **Uploads to HF?** | no (writes `artifacts/`) | no (writes `artifacts/`) | **yes** → `arudaev/chexvision-mini` |
+| **Results meaningful?** | no — random data | weak (tiny subset) | **yes — the reportable run** |
+
+- **synthetic** — offline **smoke test**: a made-up but learnable problem that
+  proves the whole pipeline runs end to end in seconds. Numbers are meaningless.
+- **local** — real-data **sanity check** on your laptop: streams a few hundred
+  real images (never the full ~8 GB), confirms the net learns real signal.
+- **Kaggle dispatch** — the **actual training run** (`scripts/dispatch.py kaggle
+  push numpy` in the parent repo): 60k images, 200 epochs, ~4h, then uploads the
+  checkpoint + metrics + model card to HF. This is where the headline AUC ≈ 0.70
+  comes from. `--mode kaggle` *could* run locally, but it would stream 60k images
+  and grind for hours — that's why it goes to Kaggle. Only this run touches HF.
+
 ## Compute
 
 Pure NumPy, **CPU-only** (no GPU — by design). The whole pipeline runs the same
