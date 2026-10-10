@@ -1,19 +1,23 @@
+<p align="center">
+  <img src=".github/banner.png" alt="chexvision-mini – a hand-drawn banner: a notebook with a small neural network sketched in it, beside a chest X-ray and a calculator" width="100%">
+</p>
+
 # chexvision-mini
 
-A **true from-scratch neural network in pure NumPy** — every forward pass *and*
+A **true from-scratch neural network in pure NumPy** – every forward pass *and*
 every gradient is derived and coded by hand, with **no autograd and no deep-
 learning framework**. Companion to the
 [CheXVision](https://github.com/arudaev/chexvision) chest X-ray project.
 
 Where CheXVision uses PyTorch (a custom CNN and a DenseNet-121 transfer model),
-this repo implements the underlying mathematics directly — forward propagation,
-backpropagation, optimizers, and regularisation — to *demonstrate understanding
+this repo implements the underlying mathematics directly – forward propagation,
+backpropagation, optimizers, and regularisation – to *demonstrate understanding
 of the fundamentals*. It follows the structure of the *Neural Networks from
 Scratch in Python* (NNFS) book and the "Deep Learning & Big Data" syllabus.
 
 **What it does, in one sentence:** take a chest X-ray, shrink it to 64×64
 grayscale, flatten it to 4096 numbers, push it through a small fully-connected
-network, and output one number — the probability the X-ray is *abnormal*.
+network, and output one number – the probability the X-ray is *abnormal*.
 
 ```mermaid
 flowchart LR
@@ -30,7 +34,7 @@ flowchart LR
 ---
 
 <details>
-<summary><b>📖 Reading guide — learn the whole codebase in one sitting (click to expand)</b></summary>
+<summary><b>📖 Reading guide – learn the whole codebase in one sitting (click to expand)</b></summary>
 
 <br>
 
@@ -44,70 +48,70 @@ is also the NNFS learning order.
 > core idea (forward, error, backprop, proof, training loop). Everything else is
 > supporting machinery.
 
-### Step 1 — A neuron and a layer · `chexvision_mini/layers.py`
+### Step 1 – A neuron and a layer · `chexvision_mini/layers.py`
 A **neuron** multiplies each input by a **weight**, adds them up, and adds a
 **bias**. A **Linear (dense) layer** does that for many neurons at once, which is
 just one matrix multiply: `output = x @ W + b`.
-- `Linear.forward` — the matrix multiply.
-- `ReLU.forward` — keeps positive values, zeroes negatives. This **non-linearity**
+- `Linear.forward` – the matrix multiply.
+- `ReLU.forward` – keeps positive values, zeroes negatives. This **non-linearity**
   is what lets a network model curves instead of just straight lines.
-- `Sigmoid.forward` — squashes any number into (0, 1), i.e. a **probability**.
+- `Sigmoid.forward` – squashes any number into (0, 1), i.e. a **probability**.
 - *Why "He init"?* weights start as small random numbers scaled for ReLU so the
   signal neither vanishes nor explodes as it flows through layers.
 
-### Step 2 — Measuring error · `chexvision_mini/losses.py`
+### Step 2 – Measuring error · `chexvision_mini/losses.py`
 The **loss** is a single number: how wrong the prediction is (lower = better).
 For a yes/no task we use **binary cross-entropy (BCE)**. We compute it directly
-from the raw output (the "logit", before sigmoid) for numerical stability — hence
+from the raw output (the "logit", before sigmoid) for numerical stability – hence
 **BCE-with-logits**.
-- `BCEWithLogitsLoss.forward` — the loss value.
-- `BCEWithLogitsLoss.backward` — the gradient `(sigmoid(z) − y) / N`: the first
+- `BCEWithLogitsLoss.forward` – the loss value.
+- `BCEWithLogitsLoss.backward` – the gradient `(sigmoid(z) − y) / N`: the first
   push that tells the network how to change its output to reduce error.
 
-### Step 3 — Learning: backpropagation · `layers.py` (backward) + `network.py`
+### Step 3 – Learning: backpropagation · `layers.py` (backward) + `network.py`
 To improve, we need to know how *each weight* affects the loss. That's the
 **chain rule**: walk backwards through the network, multiplying local gradients.
-- `Linear.backward` — the three core formulas: `dW = xᵀ·dout`, `db = Σ dout`,
+- `Linear.backward` – the three core formulas: `dW = xᵀ·dout`, `db = Σ dout`,
   `dx = dout·Wᵀ` (gradient for this layer's weights, its bias, and what to hand
   to the previous layer).
-- `ReLU.backward` — gradient flows only where the input was positive.
-- `Sequential.forward` / `Sequential.backward` — runs layers in order, then in
+- `ReLU.backward` – gradient flows only where the input was positive.
+- `Sequential.forward` / `Sequential.backward` – runs layers in order, then in
   **reverse** for the backward pass. This is backpropagation in 5 lines.
 
-### Step 4 — Proving the gradients are correct · `chexvision_mini/gradcheck.py`
+### Step 4 – Proving the gradients are correct · `chexvision_mini/gradcheck.py`
 How do we know the hand-derived gradients are right? **Gradient checking.** Nudge
 a weight up and down by a tiny ε, see how the loss changes (the *numerical*
 gradient), and compare to our *analytic* gradient. If they match to ~1e-6, the
 backprop is correct. This is the single most important test in the project.
-- `gradient_check` — the comparison.
-- `tests/test_chexvision_mini.py::test_gradient_check_passes` — the assertion.
+- `gradient_check` – the comparison.
+- `tests/test_chexvision_mini.py::test_gradient_check_passes` – the assertion.
 
-### Step 5 — Updating the weights · `chexvision_mini/optim.py`
+### Step 5 – Updating the weights · `chexvision_mini/optim.py`
 Now that we have gradients, **optimizers** decide how to step.
-- `SGD` — move each weight a small step *opposite* its gradient (step size =
+- `SGD` – move each weight a small step *opposite* its gradient (step size =
   learning rate); optional **momentum** smooths the steps.
-- `RMSProp` — scales the step per-weight by recent gradient size.
-- `Adam` — momentum + RMSProp + bias correction; our default.
+- `RMSProp` – scales the step per-weight by recent gradient size.
+- `Adam` – momentum + RMSProp + bias correction; our default.
 
-### Step 6 — Not memorising the data · `chexvision_mini/regularizers.py`
+### Step 6 – Not memorising the data · `chexvision_mini/regularizers.py`
 A model can **overfit** (ace the training data, fail on new data).
-- `Dropout` — randomly silences neurons during training so the net can't rely on
+- `Dropout` – randomly silences neurons during training so the net can't rely on
   any single one (a no-op at inference).
-- `l1_penalty` / `l2_penalty` — discourage large weights. (L2 is wired into the
+- `l1_penalty` / `l2_penalty` – discourage large weights. (L2 is wired into the
   optimizers as "weight decay", on weights only.)
 
-### Step 7 — Getting the X-rays in · `chexvision_mini/data.py` + `augment.py`
-- `load_xray_subset` — three modes: `synthetic` (offline, no network),
+### Step 7 – Getting the X-rays in · `chexvision_mini/data.py` + `augment.py`
+- `load_xray_subset` – three modes: `synthetic` (offline, no network),
   `local` (streams a few hundred real images from Hugging Face), `kaggle`
-  (larger subset for the cloud run). It never downloads the full ~8 GB dataset —
+  (larger subset for the cloud run). It never downloads the full ~8 GB dataset –
   it **streams** and downsamples on the fly.
-- `binary_label` — label is 0 (*normal*) when the finding is "No Finding", else 1.
-- `augment_batch` — small, label-preserving image tweaks (horizontal flip, noise,
+- `binary_label` – label is 0 (*normal*) when the finding is "No Finding", else 1.
+- `augment_batch` – small, label-preserving image tweaks (horizontal flip, noise,
   brightness) that improve generalisation.
 
-### Step 8 — Putting it all together · `chexvision_mini/train.py`  ← the spine
+### Step 8 – Putting it all together · `chexvision_mini/train.py`  ← the spine
 Read `train()` top to bottom; it ties every previous step together:
-1. **Standardise** inputs (subtract mean, divide by std — stats from train only).
+1. **Standardise** inputs (subtract mean, divide by std – stats from train only).
 2. For each **epoch**: shuffle, loop **mini-batches** → forward → loss → backward
    → `optimizer.step()`.
 3. **Cosine learning-rate decay** over the run.
@@ -116,23 +120,23 @@ Read `train()` top to bottom; it ties every previous step together:
 5. After training: pick a **decision threshold** on validation, then evaluate the
    **untouched test split** once, and save all artifacts.
 
-### Step 9 — Scoring · `chexvision_mini/metrics.py`
-- `evaluation_report` — accuracy, **ROC-AUC** (threshold-independent ranking
-  quality — our headline metric), precision/recall/F1, confusion matrix, ROC/PR
+### Step 9 – Scoring · `chexvision_mini/metrics.py`
+- `evaluation_report` – accuracy, **ROC-AUC** (threshold-independent ranking
+  quality – our headline metric), precision/recall/F1, confusion matrix, ROC/PR
   curves.
-- `best_threshold` — picks the operating point (Youden's J) on validation,
+- `best_threshold` – picks the operating point (Youden's J) on validation,
   because the default 0.5 is wrong when the classes aren't 50/50.
 
-### Step 10 — Using the trained model · `chexvision_mini/inference.py`
-- `load_checkpoint` — rebuild the network and load saved weights + normalisation.
-- `predict_label` — preprocess a new image *exactly like training*, return
+### Step 10 – Using the trained model · `chexvision_mini/inference.py`
+- `load_checkpoint` – rebuild the network and load saved weights + normalisation.
+- `predict_label` – preprocess a new image *exactly like training*, return
   P(abnormal) and a label. CLI: `python -m chexvision_mini predict --checkpoint artifacts --image xray.png`.
 
 ### Reference
-- `config.yaml` — every hyperparameter (architecture, optimizer, LR, epochs,
+- `config.yaml` – every hyperparameter (architecture, optimizer, LR, epochs,
   per-mode sample counts).
-- `card.py` — renders the Hugging Face model card from the results.
-- `docs/nnfs_alignment.md` — maps each NNFS book chapter to the file above.
+- `card.py` – renders the Hugging Face model card from the results.
+- `docs/nnfs_alignment.md` – maps each NNFS book chapter to the file above.
 
 </details>
 
@@ -142,7 +146,7 @@ Read `train()` top to bottom; it ties every previous step together:
 
 | Path | Role |
 |---|---|
-| `chexvision_mini/layers.py` | Linear / ReLU / Sigmoid — forward & backward |
+| `chexvision_mini/layers.py` | Linear / ReLU / Sigmoid – forward & backward |
 | `chexvision_mini/losses.py` | BCE-with-logits + stable sigmoid |
 | `chexvision_mini/network.py` | `Sequential` container; save/load state |
 | `chexvision_mini/gradcheck.py` | finite-difference gradient check |
@@ -166,7 +170,7 @@ validation for model selection).
 
 > This is a *fundamentals demonstration*. As an MLP on 64×64 pixels (no
 > convolution) it does **not** reproduce CheXVision's headline numbers (DenseNet
-> binary AUC ≈ 0.787) — that is the PyTorch models' job. The value here is
+> binary AUC ≈ 0.787) – that is the PyTorch models' job. The value here is
 > transparent, hand-written math with a gradient-check proof, honest evaluation
 > on an untouched test split, and a working inference path.
 
@@ -185,7 +189,7 @@ python -m chexvision_mini predict --checkpoint artifacts --image xray.png
 ## Run modes
 
 There are two independent axes: the `--mode` flag (which **data**) and **where**
-the code runs. All three use the same `train.py` pipeline — pure NumPy, CPU-only;
+the code runs. All three use the same `train.py` pipeline – pure NumPy, CPU-only;
 only the data source, size, and machine differ.
 
 | | `--mode synthetic` | `--mode local` | Kaggle dispatch (`--mode kaggle`) |
@@ -197,21 +201,21 @@ only the data source, size, and machine differ.
 | **Epochs** | 15 | 12 | 200 |
 | **Time** | seconds | a few minutes | ~4 hours |
 | **Uploads to HF?** | no (writes `artifacts/`) | no (writes `artifacts/`) | **yes** → `arudaev/chexvision-mini` |
-| **Results meaningful?** | no — random data | weak (tiny subset) | **yes — the reportable run** |
+| **Results meaningful?** | no – random data | weak (tiny subset) | **yes – the reportable run** |
 
-- **synthetic** — offline **smoke test**: a made-up but learnable problem that
+- **synthetic** – offline **smoke test**: a made-up but learnable problem that
   proves the whole pipeline runs end to end in seconds. Numbers are meaningless.
-- **local** — real-data **sanity check** on your laptop: streams a few hundred
+- **local** – real-data **sanity check** on your laptop: streams a few hundred
   real images (never the full ~8 GB), confirms the net learns real signal.
-- **Kaggle dispatch** — the **actual training run** (`scripts/dispatch.py kaggle
+- **Kaggle dispatch** – the **actual training run** (`scripts/dispatch.py kaggle
   push numpy` in the parent repo): 60k images, 200 epochs, ~4h, then uploads the
   checkpoint + metrics + model card to HF. This is where the headline AUC ≈ 0.70
   comes from. `--mode kaggle` *could* run locally, but it would stream 60k images
-  and grind for hours — that's why it goes to Kaggle. Only this run touches HF.
+  and grind for hours – that's why it goes to Kaggle. Only this run touches HF.
 
 ## Compute
 
-Pure NumPy, **CPU-only** (no GPU — by design). The whole pipeline runs the same
+Pure NumPy, **CPU-only** (no GPU – by design). The whole pipeline runs the same
 locally and on a Kaggle CPU kernel; cloud dispatch lives in the parent CheXVision
 repo (see the parent repository's development guide).
 
